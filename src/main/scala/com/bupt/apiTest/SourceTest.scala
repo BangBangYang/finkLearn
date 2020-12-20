@@ -38,12 +38,12 @@ object SourceTeset {
     properties.setProperty("auto.offset.reset", "latest")
 
     val stream3 = env.addSource(new FlinkKafkaConsumer011[String]("a",new SimpleStringSchema(),properties))
-    stream3.print()
+//    stream3.print()
     //4. 自定义源
     //除了以上的source数据来源，我们还可以自定义source。需要做的，只是传入一个SourceFunction就可以。具体调用如下：
 
-//    val steam4: DataStream[SensorReading] = env.addSource(new mySensorSource)
-//    steam4.print()
+    val steam4: DataStream[SensorReading] = env.addSource(new mySensorSource)
+    steam4.print()
     //执行
     env.execute("source test")
 
@@ -72,7 +72,7 @@ class mySensorSource extends SourceFunction[SensorReading]{
         data => ctx.collect(SensorReading(data._1,curTime,data._2))
       )
 
-      Thread.sleep(1000)
+      Thread.sleep(10000)
     }
   }
 
