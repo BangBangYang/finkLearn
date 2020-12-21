@@ -1,6 +1,7 @@
 package com.bupt.apiTest
 
-import org.apache.flink.api.common.functions.ReduceFunction
+import org.apache.flink.api.common.functions.{FilterFunction, MapFunction, ReduceFunction, RichMapFunction}
+import org.apache.flink.configuration.Configuration
 import org.apache.flink.streaming.api.scala._
 
 /**
@@ -95,8 +96,11 @@ object transformTest {
    //4.3 union
 
     val unionStream = highTempStream.union(lowTempStream)
-    unionStream.print()
+//    unionStream.print()
 
+    //5 .自定义类
+    val filterStream: DataStream[SensorReading] = mapStream.filter(new KeywordFilter("sensor_1"))
+    filterStream.print()
 
     env.execute()
 
@@ -104,10 +108,80 @@ object transformTest {
 
 }
 // 定义样例类，传感器id，时间戳，温度
-case class SensorReading(id: String, timestamp: Long, temperature: Double)
-
+//case class SensorReading(id: String, timestamp: Long, temperature: Double)
+//
 class MyReduceFunction extends ReduceFunction[SensorReading]{
   override def reduce(t: SensorReading, t1: SensorReading): SensorReading = {
     SensorReading(t.id,t1.timestamp,t.temperature.min(t1.temperature))
   }
 }
+
+//自定义函数
+class KeywordFilter(keyWord: String) extends FilterFunction[SensorReading] {
+  override def filter(value: SensorReading): Boolean = {
+    value.id.startsWith(keyWord)
+  }
+}
+
+class MyMapper extends MapFunction[SensorReading,String]{
+  override def map(t: SensorReading): String = t.id + "temperture"
+}
+/*
+“富函数”是DataStream API提供的一个函数类的接口，所有Flink函数类都有其Rich版本。
+它与常规函数的不同在于，可以获取运行环境的上下文，并拥有一些生命周期方法，所以可以实现更复杂的功能。
+	RichMapFunction
+	RichFlatMapFunction
+	RichFilterFunction
+	…
+Rich Function有一个生命周期的概念。典型的生命周期方法有：
+	open()方法是rich function的初始化方法，当一个算子例如map或者filter被调用之前open()会被调用。
+	close()方法是生命周期中的最后一个调用的方法，做一些清理工作。
+	getRuntimeContext()方法提供了函数的RuntimeContext的一些信息，例如函数执行的并行度，任务的名字，以及state状态
+
+*/
+
+class MyRichMapper1 extends RichMapFunction[SensorReading,String]{
+
+  override def open(parameters: Configuration): Unit = {
+    //做一些初始化操作,比如数据库的连接
+  }
+
+  override def close(): Unit = {
+    //一般收尾工作，比如关闭数据库连接或清空状态
+  }
+
+  override def map(in: SensorReading): String = in.id + "temperture"
+}
+
+//class TempIncreWarning(interval:Long) extends  KeyedProcessFunction[String,SensorReading,String]{
+//  // 定义状态：保存上一个温度值进行比较，保存注册定时器的时间用于删除
+//  lazy val lastTempState:ValueState[Double] = getRuntimeContext.getState(new ValueStateDescriptor[Double]("last-temp",classOf[Double]))
+//  lazy val currTimerState:ValueState[Long] = getRuntimeContext.getState(new ValueStateDescriptor[Long]("current-timer-ts",classOf[Long]))
+//
+//  override def processElement(value: SensorReading, ctx: KeyedProcessFunction[String, SensorReading, String]#Context, out: Collector[String]): Unit = {
+//    //先取状态
+//    val lastTemp = lastTempState.value()
+//    val timerTs = currTimerState.value()
+//    //更新温度值
+//    lastTempState.update(value.temperature)
+//    //当前温度值和上次温度进行比较
+//    if(value.temperature > lastTemp && timerTs == 0){
+//      // 如果温度上升且没有定时器，那么注册当前数据时间戳10之后的定时器
+//      val ts = ctx.timerService().currentProcessingTime()+interval
+//      ctx.timerService().registerProcessingTimeTimer(ts)
+//      currTimerState.update(ts)
+//
+//    }else if(value.temperature < lastTemp){
+//      //如果温度下降，删除定时器
+//      ctx.timerService().deleteProcessingTimeTimer(timerTs)
+//      currTimerState.clear()
+//
+//    }
+//
+//  }
+//
+//  override def onTimer(timestamp: Long, ctx: KeyedProcessFunction[String, SensorReading, String]#OnTimerContext, out: Collector[String]): Unit = {
+//    out.collect("传感器"+ctx.getCurrentKey+"的温度连续"+interval/1000+"秒上升了")
+//    currTimerState.clear()
+//  }
+//}
