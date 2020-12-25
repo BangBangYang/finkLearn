@@ -4,6 +4,7 @@ import org.apache.flink.streaming.api.scala._
 import org.apache.flink.table.api.DataTypes
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.descriptors.{Csv, FileSystem, Schema}
+import org.apache.flink.types.Row
 
 /**
  * @author yangkun
@@ -33,7 +34,19 @@ object FileOutputTest {
         .filter('id ==="sensor_1")
 //    resultTable.toAppendStream[(String,Double)].print("res")
     //3.2 聚合转化
-
+    val aggTable = sensorTable
+      .groupBy("id") //基于id分组
+      .select('id, 'id.count as 'count)
+    //    aggTable.toRetractStream[(String,Long)].print("aggRes")
+    //    aggTable.toRetractStream[Row].print("aggRes")
+    //4 输出到文件
+    tableEnv.connect(new FileSystem().path("output/res.txt"))
+      .withFormat(new Csv())
+      .withSchema(new Schema()
+        .field("id", DataTypes.STRING())
+        .field("temperature", DataTypes.DOUBLE()))
+      .createTemporaryTable("outputTable")
+    resultTable.insertInto("outputTable")
     env.execute("table api test")
   }
 
